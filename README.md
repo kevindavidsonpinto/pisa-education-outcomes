@@ -1,8 +1,15 @@
+## Repository Contents
+
+- `pisa_econometric_analysis.Rmd` – Main R Markdown file containing the full analysis.
+- `QRM III PISA Case.pdf` – Final report.
+- `Case2026_assignment.pdf` – Original assignment brief.
+- `figures/` – Visual outputs used in the report and README.
+
 ## Dataset
 
 The analysis uses data from the OECD Programme for International Student Assessment (PISA), an international survey measuring mathematics, reading and science performance of 15-year-old students across countries.
 
-# PISA Education Outcomes Analysis
+## PISA Education Outcomes Analysis
 
 This project analyzes educational outcomes using PISA 2022 data across eight countries.  
 The analysis was conducted in R as part of a Quantitative Research Methods project.
