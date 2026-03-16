@@ -58,7 +58,7 @@ Main R script containing the full econometric analysis.
 The raw dataset is not included in this repository.  
 Please obtain the original PISA dataset separately before running the analysis.
 
-## Author
+## Authors
 
-Kevin Pinto  
+Kevin Pinto  & David Oldewarris
 Vrije Universiteit Amsterdam – Economics
