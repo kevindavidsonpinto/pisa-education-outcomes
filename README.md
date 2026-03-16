@@ -56,8 +56,8 @@ Main R script containing the full econometric analysis.
 ## Example Visualization
 
 ![Score Distribution](figures/figure1_scores.png)
-![Correlation](figure2_reading_math_correlation.png)
-![Interaction](figure3_q5_interaction.png)
+![Correlation](figures/figure2_reading_math_correlation.png)
+![Interaction](figures/figure3_q5_interaction.png)
 
 ## Data
 
