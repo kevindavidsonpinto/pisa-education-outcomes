@@ -45,11 +45,11 @@ pisa-education-outcomes
 │
 ├── pisa_case_analysis.R
 ├── report/
-│ └── QRM_III_PISA_Education_Outcomes.pdf
+│   └── QRM_III_PISA_Education_Outcomes.pdf
 ├── figures/
-│ ├── score_distributions.png
-│ ├── reading_math_correlation.png
-│ └── interaction_effects.png
+│   ├── score_distributions.png
+│   ├── reading_math_correlation.png
+│   └── interaction_effects.png
 
 ## Data
 
