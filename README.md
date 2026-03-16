@@ -1,3 +1,7 @@
+## Dataset
+
+The analysis uses data from the OECD Programme for International Student Assessment (PISA), an international survey measuring mathematics, reading and science performance of 15-year-old students across countries.
+
 # PISA Education Outcomes Analysis
 
 This project analyzes educational outcomes using PISA 2022 data across eight countries.  
@@ -54,9 +58,16 @@ Main R script containing the full econometric analysis.
 - `interaction_effects.png` – Interaction model results by language spoken at home.
 
 ## Example Visualization
-
+### Distribution of Standardized Test Scores
+This figure shows the distribution of standardized mathematics, reading, and science scores.
 ![Score Distribution](figures/figure1_scores.png)
+
+### Correlation between Reading and Math Scores
+This figure shows the distribution of standardized mathematics, reading, and science scores.
 ![Correlation](figures/figure2_reading_math_correlation.png)
+
+### Interaction between test-taker native languages
+This figure shows the interaction between students who natively speaks the test language, and students who do not natively speak the test language.
 ![Interaction](figures/figure3_q5_interaction.png)
 
 ## Data
