@@ -53,6 +53,10 @@ Main R script containing the full econometric analysis.
 - `reading_math_correlation.png` – Correlation between reading and mathematics scores.  
 - `interaction_effects.png` – Interaction model results by language spoken at home.
 
+## Example Visualization
+
+![Score Distribution](figures/figure1_scores.png)
+
 ## Data
 
 The raw dataset is not included in this repository.  
