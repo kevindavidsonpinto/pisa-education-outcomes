@@ -1,0 +1,1038 @@
+---
+title: "An Empirical Study of Educational Outcomes"
+subtitle: "Regression Evidence from PISA 2022 Across Eight Countries"
+author: |
+  **Kevin Pinto, David Oldewarris**  
+date: "March 9th, 2026"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+  word_document: default
+---
+
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list = ls())   
+graphics.off()    
+cat("\014")       
+
+## REMEMBER TO  Load packages explicitly for pdf knitting later!!
+install.packages(c("readr","dplyr","ggplot2","sandwich","lmtest","AER","modelsummary","forcats","tidyr","scales", "lubridate","moments","kableExtra","tinytex", "ggtext", "stargazer", "flextabl", "officer", "stringr", "pandoc"))
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(sandwich)
+library(lmtest)
+library(AER)
+library(modelsummary)
+library(forcats)
+library(tidyr)
+library(scales)
+library(lubridate)
+library(moments)
+library(kableExtra)
+library(tinytex)
+library(ggtext)
+library(stargazer)
+library(flextable)
+library(officer)
+library(stringr)
+library(pandoc)
+library(webshot2)
+
+#options(modelsummary_factory = "kableExtra")
+#options(modelsummary_format_numeric_latex = "plain")
+#tinytex::reinstall_tinytex()
+```
+
+```{r}
+setwd("C:/Users/kevin/Documents/QRM3")
+
+# Load dataset & rename country variable bc it's confusing AF
+pisa <- read_csv("QRMIII_Casedata_PISA.csv", show_col_types = FALSE) |>
+  mutate(
+    country_name = as.factor(CNTRYID)
+  )
+```
+
+Question 0: 
+0) Filter to 8 countries: "Mexico", "Republic of Moldova", "Croatia", "Dominican Republic",
+  "Türkiye", "Indonesia", "Japan", "Montenegro". 
+```{r}
+countries <- c("Mexico","Republic of Moldova","Croatia","Dominican Republic",
+               "Türkiye","Indonesia","Japan","Montenegro")
+
+pisa_sub <- pisa |>
+  filter(country_name %in% countries) |>
+  mutate(
+    math_std    = as.numeric(scale(MATHSCORE)),
+    reading_std = as.numeric(scale(READINGSCORE)),
+    science_std = as.numeric(scale(SCIENCESCORE))
+  )
+
+#Sanity check to see whether there are indeed 8 countries
+country_table <- pisa_sub |>
+  count(country_name) |>
+  arrange(country_name)
+country_table
+```
+
+```{r}
+fig0 <- pisa_sub |>
+  count(country_name) |>
+  ggplot(aes(
+    x = reorder(country_name, n),
+    y = n,
+    fill = country_name
+  )) +
+  geom_col() +
+  geom_text(
+    aes(label = n),
+    hjust = 1.1,
+    color = "white",
+    size = 3.5
+  ) +
+  coord_flip() +
+  scale_fill_manual(values = c(
+    "steelblue","firebrick","seagreen","salmon2",
+    "purple3","darkgoldenrod2","burlywood4","gray87"
+  )) +
+  labs(
+    title = "Student composition by country",
+    x = "Country",
+    y = "Number of students",
+    caption = paste0(
+      "**Figure 0:** Student composition by country.<br>",
+      "*Note:* The figure reports the number of students in the PISA 2022 sample for each country included in the analysis."
+    )
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.caption = ggtext::element_textbox_simple(
+      size = 9,
+      hjust = 0,
+      width = unit(1, "npc"),
+      margin = margin(t = 10)
+    ),
+    plot.margin = margin(t = 10, r = 10, b = 35, l = 10)
+  )
+
+fig0
+
+ggsave(
+  "figure0_student_composition.png",
+  plot = fig0,
+  width = 7,
+  height = 5.5,
+  dpi = 300
+)
+```
+
+Q0: Standardize the three test scores; MATHSCORE, READINGSCORE, SCIENCESCORE
+```{r}
+# 1) Standardize the three test scores (z-scores)
+# function: scale() standardizes using (x - mean(x)) / sd(x) and handles NA values.
+pisa_sub <- pisa_sub |>
+  mutate(
+    math_std    = as.numeric(scale(MATHSCORE)),
+    reading_std = as.numeric(scale(READINGSCORE)),
+    science_std = as.numeric(scale(SCIENCESCORE))
+  )
+
+#Sanity check for the standardized scores:
+sanity_check_stdscores <- tibble::tibble(
+  Test_score = c("Mathematics", "Reading", "Science"),
+  Mean_standardized = c(
+    mean(pisa_sub$math_std, na.rm = TRUE),
+    mean(pisa_sub$reading_std, na.rm = TRUE),
+    mean(pisa_sub$science_std, na.rm = TRUE)
+  ),
+  SD_standardized = c(
+    sd(pisa_sub$math_std, na.rm = TRUE),
+    sd(pisa_sub$reading_std, na.rm = TRUE),
+    sd(pisa_sub$science_std, na.rm = TRUE)
+  )
+)
+
+sanity_check_stdscores
+```
+Q0: Report the summary statistics (mean and standard deviation) of the original and standardized test scores.
+```{r}
+# 2) Summary statistics (mean + SD), original and standardized
+q0_stats <- tibble::tibble(
+  Score = c("Math", "Reading", "Science"),
+  Mean_original = round(c(
+    mean(pisa_sub$MATHSCORE, na.rm = TRUE),
+    mean(pisa_sub$READINGSCORE, na.rm = TRUE),
+    mean(pisa_sub$SCIENCESCORE, na.rm = TRUE)
+  ),2),
+  SD_original = round(c(
+    sd(pisa_sub$MATHSCORE, na.rm = TRUE),
+    sd(pisa_sub$READINGSCORE, na.rm = TRUE),
+    sd(pisa_sub$SCIENCESCORE, na.rm = TRUE)
+  ),2),
+  Mean_standardized = round(c(
+    mean(pisa_sub$math_std, na.rm = TRUE),
+    mean(pisa_sub$reading_std, na.rm = TRUE),
+    mean(pisa_sub$science_std, na.rm = TRUE)
+  ),2),
+  SD_standardized = round(c(
+    sd(pisa_sub$math_std, na.rm = TRUE),
+    sd(pisa_sub$reading_std, na.rm = TRUE),
+    sd(pisa_sub$science_std, na.rm = TRUE)
+  ),2)
+)
+
+ft_q0 <- flextable(q0_stats) |>
+  autofit() |>
+  add_footer_lines(
+    values = "Note: Standardized scores are calculated using Z = (X − mean(X)) / sd(X). After standardization the mean equals 0 and the standard deviation equals 1."
+  )
+
+save_as_docx(
+  "Table 1: Summary Statistics of Original and Standardized Test Scores" = ft_q0,
+  path = "C:/Users/kevin/Documents/QRM3/q0_summary_table.docx"
+)
+```
+What units are the standardized variables? What is the advantage of standardization?
+**ANSWER in word doc**
+
+Question 1: Draw one graph illustrating the distribution of the three standardized test scores. 
+```{r}
+pisa_sub |>
+  pivot_longer(
+    cols = c(math_std, reading_std, science_std),
+    names_to = "subject",
+    values_to = "zscore"
+  ) |>
+  ggplot(aes(x = zscore, fill = subject)) +
+  geom_histogram(
+    bins = 30,
+    color = "black",
+    linewidth = 0.25
+  ) +
+  facet_wrap(~ subject, scales = "free_y") +
+  scale_fill_manual(
+    values = c(
+      "math_std" = "steelblue",
+      "reading_std" = "firebrick",
+      "science_std" = "seagreen"
+    )
+  ) +
+  labs(
+    title = "Distribution of Standardized Test Scores",
+    x = "Standard Deviations from the Sample Mean",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+```{r}
+note_text_fig1 <- paste0(
+  "**Figure 1.** ",
+  "<br>", 
+  "Note: The figure shows the distribution of standardized mathematics, reading, and science scores.",
+  "<br>",
+  "Standardization is performed using z-scores, resulting in a mean of zero and a standard deviation of one."
+)
+
+fig1_q1 <- pisa_sub |>
+  pivot_longer(
+    cols = c(math_std, reading_std, science_std),
+    names_to = "subject",
+    values_to = "zscore"
+  ) |>
+  ggplot(aes(x = zscore, fill = subject)) +
+  geom_histogram(
+    bins = 30,
+    color = "black",
+    linewidth = 0.25
+  ) +
+  facet_wrap(~ subject, scales = "free_y") +
+  scale_fill_manual(
+    values = c(
+      "math_std" = "steelblue",
+      "reading_std" = "firebrick",
+      "science_std" = "seagreen"
+    )
+  ) +
+  labs(
+    title = "Distribution of Standardized Test Scores",
+    x = "Standard Deviations from the Sample Mean",
+    y = "Count",
+    caption = note_text_fig1
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.caption = ggtext::element_textbox_simple(
+      size = 9,
+      hjust = 0,
+      halign = 0,
+      width = unit(1, "npc"),
+      padding = margin(0, 0, 0, 0),
+      margin = margin(t = 10)
+    ),
+    plot.margin = margin(t = 10, r = 10, b = 35, l = 10)
+  )
+
+ggsave(
+  "figure1_scores.png",
+  plot = fig1_q1,
+  width = 8,
+  height = 6.8,
+  dpi = 300
+)
+```
+
+Question 2: Bivariate Data Visualization
+Draw a graph illustrating the correlation between the standardized math and the standardized reading score.
+
+```{r}
+pisa_sub |>
+  ggplot(aes(x = reading_std, y = math_std)) +
+  geom_point(alpha = 0.25, color = "steelblue") +
+  geom_smooth(method = "lm", se = FALSE, color = "firebrick", linewidth = 1.2) +
+  labs(
+    title = "Correlation between Standardized Reading and Mathematics Scores",
+    x = "Standardized Reading Score",
+    y = "Standardized Mathematics Score"
+  ) +
+  theme_minimal()
+```
+```{r}
+note_text_fig2 <- paste0(
+  "**Figure 2.** ",
+  "<br>",
+  "Note: Each point represents a student in the sample. ",
+  "The solid line shows the fitted linear relationship between standardized reading and mathematics scores.",
+  "Both variables are expressed as z-scores, meaning that values represent deviations from the sample mean measured in standard deviations."
+)
+
+fig2_q2 <- pisa_sub |>
+  ggplot(aes(x = reading_std, y = math_std)) +
+  geom_point(alpha = 0.25, color = "steelblue") +
+  geom_smooth(method = "lm", se = FALSE, color = "firebrick", linewidth = 1.2) +
+  labs(
+    title = "Correlation Between Standardized Reading and Mathematics Scores",
+    x = "Standardized Reading Score",
+    y = "Standardized Mathematics Score",
+    caption = note_text_fig2
+  ) +
+  theme_minimal() +
+  theme(
+    plot.caption = ggtext::element_textbox_simple(
+      size = 9,
+      hjust = 0,
+      halign = 0,
+      width = unit(1, "npc"),
+      padding = margin(0, 0, 0, 0),
+      margin = margin(t = 10)
+    ),
+    plot.margin = margin(t = 10, r = 10, b = 40, l = 10)
+  )
+
+ggsave(
+  "figure2_reading_math_correlation.png",
+  plot = fig2_q2,
+  width = 8,
+  height = 6.8,
+  dpi = 300
+)
+```
+
+
+```{r}
+cor(pisa_sub$reading_std, pisa_sub$math_std, use = "complete.obs")
+
+```
+Discuss and interpret.
+
+**ANSEER HERE**
+
+Question 3: Univariate Regression
+Formally test the relationship you established in Question 2 through a regression analysis. Use the standardized reading score as the independent variable. Make sure to adjust your standard errors to allow for heterogeneity in this regression and in all the following regressions in the Case. Discuss the two estimates incl. interpretation and significance. Mention the test, hypothesis, and decision rule for significance once. Do you think this relationship is causal? Justify your answer.
+
+```{r}
+# OLS regression model
+model_q3 <- lm(math_std ~ reading_std, data = pisa_sub)
+
+# Q3A: Conventional OLS SE (homoskedasticity-assumption)
+summary(model_q3)
+
+# Q3B: Heteroskedasticity robustness test for SE (homoskedasticity-check)
+coeftest(model_q3, vcov. = vcovHC(model_q3, type = "HC1"))
+
+# Comparison for SE and Robust SE
+table_q3_compare <- modelsummary(
+  list(
+    "Conventional SE" = model_q3,
+    "Robust SE (HC1)" = model_q3
+  ),
+  vcov = list(
+    NULL,                              # default OLS SE
+    vcovHC(model_q3, type = "HC1")     # robust HC1 SE
+  ),
+  coef_rename = c(
+    "(Intercept)" = "Constant",
+    "reading_std" = "Standardized Reading Score"
+  ),
+  gof_map = data.frame(
+    raw = c("nobs", "r.squared", "adj.r.squared", "f.statistic"),
+    clean = c("Observations", "R-squared", "Adjusted R-squared", "F-statistic"),
+    fmt = c(0, 3, 3, 1)
+  ),
+  stars = TRUE,
+  fmt = 3,
+  title = "Table 2. Regression Results for Standardized Mathematics Scores",
+  notes = c(
+    "Notes:", 
+    "Model (1) reports conventional OLS standard errors.",
+    "Model (2) reports heteroskedasticity-robust standard errors (HC1).",
+    "The dependent variable is the standardized mathematics score."
+  ),
+  output = "flextable"
+)
+
+table_q3_compare <- table_q3_compare |>
+  autofit() |>
+  theme_booktabs() |>
+  align(align = "center", part = "all") |>
+  align(j = 1, align = "left", part = "body") |>
+  bold(part = "header") |>
+  fontsize(size = 10, part = "all") |>
+  padding(padding = 4, part = "all")
+
+table_q3_compare
+
+# Export to Word
+save_as_docx(
+  "Table 2. Regression Results for Standardized Mathematics Scores" = table_q3_compare,
+  path = "C:/Users/kevin/Documents/QRM3/table2_q3_comparison.docx"
+)
+```
+Discuss the two estimates
+incl. interpretation and significance. Mention the test, hypothesis, and decision rule for significance
+once. Do you think this relationship is causal? Justify your answer.
+
+**ANSWER HERE**
+
+*Question 4:* Multivariate Regression
+Next, you are worried that reading score depends on the language the student speaks at home. Repeat the regression from Question 3 but now also include if the students mostly speaks the test language at home; measured by the variable ST022Q01TA. You will need to transform the language variable before using it. If there are any missing values, exclude those observations. 
+```{r}
+#Step 1: Check the language variable before using it
+table(pisa_sub$ST022Q01TA, useNA = "ifany")
+```
+
+```{r}
+#Variable has three meaningful labels that we now need to convert into binary labels
+pisa_q4 <- pisa_sub |>
+  mutate(
+    speaks_test_lang = case_when(
+      ST022Q01TA == "Language of the test" ~ 1,
+      ST022Q01TA == "Other language" ~ 0,
+      TRUE ~ NA_real_
+    )
+  ) |>
+  filter(!is.na(speaks_test_lang)) #If there are any missing values, exclude those observations.
+
+#sanity check
+table(pisa_q4$speaks_test_lang)
+
+model_q4 <- lm(
+  math_std ~ reading_std + speaks_test_lang,
+  data = pisa_q4
+)
+coeftest(  model_q4,  vcov. = vcovHC(model_q4, type = "HC1"))
+
+table_q4 <- modelsummary(
+  model_q4,
+  vcov = vcovHC(model_q4, type = "HC1"),
+  coef_rename = c(
+    "(Intercept)" = "Constant",
+    "reading_std" = "Standardized Reading Score",
+    "speaks_test_lang" = "Speaks Test Language at Home"
+  ),
+  gof_map = data.frame(
+    raw = c("nobs", "r.squared", "adj.r.squared"),
+    clean = c("Observations", "R-squared", "Adjusted R-squared"),
+    fmt = c(0, 3, 3)
+  ),
+  stars = TRUE,
+  fmt = 3,
+  title = "Table 3. Multivariate Regression Results for Standardized Mathematics Scores",
+  notes = c(
+    "Notes:", 
+    "Heteroskedasticity-robust standard errors (HC1) are reported in parentheses.",
+    "The dependent variable is the standardized mathematics score.",
+    "The variable 'Speaks Test Language at Home' equals 1 if the student speaks the test language at home and 0 otherwise."
+  ),
+  output = "flextable"
+)
+
+table_q4 <- table_q4 |>
+  autofit() |>
+  theme_booktabs() |>
+  align(align = "center", part = "all") |>
+  align(j = 1, align = "left", part = "body") |>
+  bold(part = "header") |>
+  fontsize(size = 10, part = "all") |>
+  padding(padding = 4, part = "all")
+
+table_q4
+
+save_as_docx(
+  "Table 3. Multivariate Regression Results for Standardized Mathematics Scores" = table_q4,
+  path = "C:/Users/kevin/Documents/QRM3/table3_q4_multivariate_regression.docx"
+)
+```
+
+Interpret the results incl. significance.
+
+**ANSWER HERE**
+
+*Question 5:* Interaction
+Now, you hypothesize that the student’s main language may also affect the correlation between the math
+and reading scores. Test this prediction in a regression. Also, illustrate the heterogeneous correlations in a
+graph. Describe and discuss the result.
+
+```{r}
+#Does the relationship between reading and math depend on whether the student speaks the test language at home?
+model_q5 <- lm(
+  math_std ~ reading_std * speaks_test_lang,
+  data = pisa_q4
+)
+
+coeftest(  model_q5,  vcov. = vcovHC(model_q5, type = "HC1"))
+table_q5 <- modelsummary(
+  model_q5,
+  vcov = vcovHC(model_q5, type = "HC1"),
+  coef_rename = c(
+    "(Intercept)" = "Constant",
+    "reading_std" = "Standardized Reading Score",
+    "speaks_test_lang" = "Speaks Test Language at Home",
+    "reading_std:speaks_test_lang" = "Reading × Speaks Test Language"
+  ),
+  gof_map = data.frame(
+    raw = c("nobs", "r.squared", "adj.r.squared"),
+    clean = c("Observations", "R-squared", "Adjusted R-squared"),
+    fmt = c(0, 3, 3)
+  ),
+  stars = TRUE,
+  fmt = 3,
+  title = "Table 4. Interaction Regression Results for Standardized Mathematics Scores",
+  notes = c(
+    "Notes:",
+    "Heteroskedasticity-robust standard errors (HC1) are reported in parentheses.",
+    "The dependent variable is the standardized mathematics score.",
+    "The variable 'Speaks Test Language at Home' equals 1 if the student speaks the test language at home and 0 otherwise.",
+    "The interaction term captures whether the relationship between reading and mathematics differs by language spoken at home.",
+    "- β₁ = effect of reading_std, when speaks_test_lang = 0
+- β₃ = difference in the effect between the two groups
+- β₁ + β₃ = effect when, speaks_test_lang = 1"
+  ),
+  output = "flextable"
+)
+
+table_q5 <- table_q5 |>
+  autofit() |>
+  theme_booktabs() |>
+  align(align = "center", part = "all") |>
+  align(j = 1, align = "left", part = "body") |>
+  bold(part = "header") |>
+  fontsize(size = 10, part = "all") |>
+  padding(padding = 4, part = "all")
+
+# Preview in RStudio
+table_q5
+
+# Export to Word
+save_as_docx(
+  "Table 4. Interaction Regression Results for Standardized Mathematics Scores" = table_q5,
+  path = "C:/Users/kevin/Documents/QRM3/table4_q5_interaction_regression.docx"
+)
+```
+
+```{r}
+note_text_fig3 <- str_wrap(
+  "Note: Each point represents a student. The fitted lines show the estimated linear relationship between standardized reading and mathematics scores for students who speak the test language at home and those who do not.",
+  width = 110
+)
+
+fig3_q5 <- pisa_q4 |>
+  ggplot(aes(
+    x = reading_std,
+    y = math_std,
+    color = factor(speaks_test_lang)
+  )) +
+  geom_point(alpha = 0.15, size = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
+  scale_color_manual(
+    values = c("0" = "firebrick", "1" = "navy"),
+    labels = c("0" = "Other language", "1" = "Test language")
+  ) +
+  labs(
+    title = "Heterogeneous Correlation Between Reading and Mathematics Scores",
+    subtitle = "Separate fitted lines by language spoken at home",
+    x = "Standardized Reading Score",
+    y = "Standardized Mathematics Score",
+    color = "Language at home",
+    caption = note_text_fig3
+  ) +
+  theme_minimal() +
+  theme(
+    plot.caption = element_text(hjust = 0, size = 9, margin = margin(t = 10)),
+    plot.margin = margin(t = 10, r = 10, b = 25, l = 10)
+  )
+
+fig3_q5
+
+ggsave(
+  filename = "figure3_q5_interaction.png",
+  plot = fig3_q5,
+  width = 8,
+  height = 6.5,
+  dpi = 300
+)
+```
+
+Tables Part 1
+```{r}
+model_q3 <- lm(math_std ~ reading_std, data = pisa_sub)
+
+model_q4 <- lm(
+  math_std ~ reading_std + speaks_test_lang,
+  data = pisa_q4
+)
+
+model_q5 <- lm(
+  math_std ~ reading_std * speaks_test_lang,
+  data = pisa_q4
+)
+
+se_q3 <- sqrt(diag(vcovHC(model_q3, type = "HC1")))
+se_q4 <- sqrt(diag(vcovHC(model_q4, type = "HC1")))
+se_q5 <- sqrt(diag(vcovHC(model_q5, type = "HC1")))
+
+stargazer(
+  model_q3, model_q4, model_q5,
+  type = "html",
+  out = "C:/Users/kevin/Documents/QRM3/table_part1.html",
+  se = list(se_q3, se_q4, se_q5),
+  title = "Table 5. Regression Results for Standardized Mathematics Scores",
+  dep.var.labels = "Standardized Mathematics Score",
+  column.labels = c("Q3", "Q4", "Q5"),
+  covariate.labels = c(
+    "Standardized Reading Score",
+    "Speaks Test Language at Home",
+    "Reading × Speaks Test Language"
+  ),
+  omit.stat = c("f", "ser"),
+  digits = 3,
+  no.space = TRUE,
+  notes = "Heteroskedasticity-robust standard errors (HC1) are reported in parentheses. The variable 'Speaks Test Language at Home' equals 1 if the student speaks the test language at home and 0 otherwise.",
+  notes.align = "l"
+)
+
+webshot(
+  url = "C:/Users/kevin/Documents/QRM3/table_part1.html",
+  file = "C:/Users/kevin/Documents/QRM3/table5_part1.png",
+  vwidth = 1400,
+  vheight = 900,
+  zoom = 2
+)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+*Question 6* 
+Start by regressing the standardized math score on the variable “ICTRES”, which is a measure of ICT resources at home. Also include dummies for each of the countries in your dataset:
+$$
+\text{MATHSCORE}_i = \beta_0 + \beta_1 \, \text{ICTRES}_i + \sum_{c=1}^{C} \gamma_c \, I_{(\text{Country}_i = c)} + u_i
+$$
+where ICountryi=C is a dummy variable that takes the value 1 if student i is from country C and 0 otherwise.Provide a precise interpretation of the coefficient for ICTRES.
+
+```{r}
+# Question 6: ICT resources and standardized mathematics scores
+# Check availability of ICTRES by country
+table(!is.na(pisa_sub$ICTRES), pisa_sub$country_name)
+
+# Keep complete observations for relevant variables
+pisa_sub_complete1 <- pisa_sub |>
+  drop_na(math_std, ICTRES, country_name)
+
+# Check factor levels to identify the baseline country
+levels(pisa_sub_complete1$country_name)
+
+# Estimate regression model
+std_MathScore_ICT_model <- lm(
+  math_std ~ ICTRES + country_name,
+  data = pisa_sub_complete1
+)
+
+summary(std_MathScore_ICT_model)
+
+coeftest(
+  std_MathScore_ICT_model,
+  vcov. = vcovHC(std_MathScore_ICT_model, type = "HC1")
+)
+
+table_q6 <- modelsummary(
+  std_MathScore_ICT_model,
+  vcov = vcovHC(std_MathScore_ICT_model, type = "HC1"),
+  coef_rename = c(
+    "(Intercept)" = "Constant",
+    "ICTRES" = "ICT Resources at Home"
+  ),
+  coef_omit = "country_name",
+  gof_map = data.frame(
+    raw = c("nobs", "r.squared", "adj.r.squared"),
+    clean = c("Observations", "R-squared", "Adjusted R-squared"),
+    fmt = c(0, 3, 3)
+  ),
+  stars = TRUE,
+  fmt = 3,
+  title = "Table 6. Regression Results for Standardized Mathematics Scores and ICT Resources",
+  notes = c(
+    "Notes:",
+    "Heteroskedasticity-robust standard errors (HC1) are reported in parentheses.",
+    "The dependent variable is the standardized mathematics score.",
+    "Country dummies are included in the regression but omitted from the table."
+  ),
+  output = "flextable"
+)
+
+table_q6 <- table_q6 |>
+  autofit() |>
+  theme_booktabs() |>
+  align(align = "center", part = "all") |>
+  align(j = 1, align = "left", part = "body") |>
+  bold(part = "header") |>
+  fontsize(size = 10, part = "all") |>
+  padding(padding = 4, part = "all")
+
+table_q6
+
+save_as_docx(
+  "Table 6. Regression Results for Standardized Mathematics Scores and ICT Resources" = table_q6,
+  path = "C:/Users/kevin/Documents/QRM3/table5_q6_ict_math.docx"
+)
+```
+The OLS regression models the relation between the independent variable of ICTRES and the dependent variable of standardized math scores, while accounting for country differences. This means that an one unit increase of ICTRES leads to an increase of 0,24 standard deviations of math scores while keeping the country constant. The model accounts for the differences of the countries via the coefficient gamma which affects the intercept not the slope of the regression, where the . In this case the beta1 is statistically significant since p-value<alfa (2e-16<0.05). 
+
+*Question 7*
+Estimate the same regression model again, but now use the log-transformed math test scores (not the standardized version) as the dependent variable.
+• Provide a precise interpretation of the coefficient for ICTRES.
+• Provide a precise interpretation of the coefficient for one of the country dummies (you can choose any country dummy for this).
+• Briefly comment on the benefits and downsides of using log-transformed test scores in this context as compared to the standardized variable in the previous question.
+
+```{r}
+# Question 7
+# Add log-transformed math score and keep complete observations
+pisa_sub_complete1 <- pisa_sub |>
+  mutate(
+    logged_MathScores = log(MATHSCORE)
+  ) |>
+  drop_na(logged_MathScores, ICTRES, country_name)
+
+logged_MathScore_ICT_model <- lm(
+  logged_MathScores ~ ICTRES + country_name,
+  data = pisa_sub_complete1
+)
+
+summary(logged_MathScore_ICT_model)
+
+coeftest(
+  logged_MathScore_ICT_model,
+  vcov. = vcovHC(logged_MathScore_ICT_model, type = "HC1")
+)
+
+table_q7 <- modelsummary(
+  logged_MathScore_ICT_model,
+  vcov = vcovHC(logged_MathScore_ICT_model, type = "HC1"),
+  coef_rename = c(
+    "(Intercept)" = "Constant",
+    "ICTRES" = "ICT Resources at Home"
+  ),
+  coef_omit = "country_name",
+  gof_map = data.frame(
+    raw = c("nobs", "r.squared", "adj.r.squared"),
+    clean = c("Observations", "R-squared", "Adjusted R-squared"),
+    fmt = c(0, 3, 3)
+  ),
+  stars = TRUE,
+  fmt = 3,
+  title = "Table 7. Regression Results for Log Mathematics Scores and ICT Resources",
+  notes = c(
+    "Notes:",
+    "Heteroskedasticity-robust standard errors (HC1) are reported in parentheses.",
+    "The dependent variable is the log-transformed mathematics score.",
+    "Country dummies are included in the regression but omitted from the table."
+  ),
+  output = "flextable"
+)
+
+table_q7 <- table_q7 |>
+  autofit() |>
+  theme_booktabs() |>
+  align(align = "center", part = "all") |>
+  align(j = 1, align = "left", part = "body") |>
+  bold(part = "header") |>
+  fontsize(size = 10, part = "all") |>
+  padding(padding = 4, part = "all")
+
+table_q7
+
+save_as_docx(
+  "Table 7. Regression Results for Log Mathematics Scores and ICT Resources" = table_q7,
+  path = "C:/Users/kevin/Documents/QRM3/table6_q7_logged_math.docx"
+)
+
+```
+
+*Question 8*
+The effect of ICT resources at home on test scores is likely to be confounded by other omitted factors in the home environment of the student. We would like to control for whether or not the family lived in poverty,and will use the variable ST258Q01JA as a proxy (it measures how often there was insufficient food in the last 90 days). Add this variable to the regression model as a control variable (think about how to include it, given that it is a categorical variable). Use the standardized test score as the dependent variable, not the log-transformed variable. Answer the following questions:
+• Interpret the effect of poverty (lack of food). Is it in line with your expectations?
+• Comment briefly on how the coefficient for ICTRES changes now that you added the control variable.
+• Calculate the omitted variable bias in the coefficient of ICTRES in the regression without the control variable.
+• Use the omitted variable bias formula to show whether the correlation between ICTRES and lack
+of food is positive or negative (do not compute it from your data!)
+
+```{r}
+# Question 8
+# Check variable type and categories
+class(pisa_sub$ST258Q01JA)
+unique(pisa_sub$ST258Q01JA)
+
+# Create factor and drop missing observations
+pisa_sub_complete2 <- pisa_sub_complete1 |>
+  mutate(
+    food_shortage = as.factor(ST258Q01JA)
+  ) |>
+  drop_na(math_std, ICTRES, country_name, food_shortage)
+
+# Check baseline country
+levels(pisa_sub_complete2$country_name)
+
+# Estimate model with poverty proxy
+controlVar_MathScore_ICT_model <- lm(
+  math_std ~ ICTRES + country_name + food_shortage,
+  data = pisa_sub_complete2
+)
+
+summary(controlVar_MathScore_ICT_model)
+
+coeftest(
+  controlVar_MathScore_ICT_model,
+  vcov. = vcovHC(controlVar_MathScore_ICT_model, type = "HC1")
+)
+
+table_q8 <- modelsummary(
+  controlVar_MathScore_ICT_model,
+  vcov = vcovHC(controlVar_MathScore_ICT_model, type = "HC1"),
+  coef_rename = c(
+    "(Intercept)" = "Constant",
+    "ICTRES" = "ICT Resources at Home"
+  ),
+  coef_omit = "country_name|food_shortage",
+  gof_map = data.frame(
+    raw = c("nobs", "r.squared", "adj.r.squared"),
+    clean = c("Observations", "R-squared", "Adjusted R-squared"),
+    fmt = c(0, 3, 3)
+  ),
+  stars = TRUE,
+  fmt = 3,
+  title = "Table 7. Regression Results with Food Availability Control",
+  notes = c(
+    "Notes:",
+    "Heteroskedasticity-robust standard errors (HC1) are reported in parentheses.",
+    "The dependent variable is the standardized mathematics score.",
+    "Country dummies and food availability categories are included in the regression.",
+    "Country dummy coefficients are omitted from the table."
+  ),
+  output = "flextable"
+)
+
+table_q8 <- table_q8 |>
+  autofit() |>
+  theme_booktabs() |>
+  align(align = "center", part = "all") |>
+  align(j = 1, align = "left", part = "body") |>
+  bold(part = "header") |>
+  fontsize(size = 10, part = "all") |>
+  padding(padding = 4, part = "all")
+
+table_q8
+
+save_as_docx(
+  "Table 7. Regression Results with Food Availability Control" = table_q8,
+  path = "C:/Users/kevin/Documents/QRM3/table7_q8_control_food.docx"
+)
+```
+
+*Question 9*
+There is likely still omitted variable bias (even when including the proxy for poverty). As a final step we’ll consider instrumental variable estimation, using the highest level of education that the parents attained (HISCED) as an instrument for ICT resources at home. Before estimating the model, answer the following questions:
+• State precisely the relevance condition in this case, and discuss briefly whether you think it is satisfied.
+• State precisely the exogeneity condition in this case, and discuss briefly whether you think it is satisfied.
+
+
+*Question 10*
+Estimate the effect of ICT resources at home on test scores using HISCED as an instrument. The variable HISCED is a categorical variable, so you will need to include it as a set of dummies. You can use the ivreg function from the AER package to estimate the model.
+• Provide a brief interpretation of the coefficient for ICTRES. Does it have a causal interpretation?
+• If one assumes that the instrument is valid (i.e. satisfies both the relevance and exogeneity conditions), conclude whether the omitted variable bias in the OLS model (Question . . . ) was positive or negative. Explain your answer.
+
+```{r}
+# Question 9 and 10
+# Create instrument and drop missing observations
+pisa_sub_complete3 <- pisa_sub_complete2 |>
+  mutate(
+    parent_edu = as.factor(HISCED)
+  ) |>
+  drop_na(math_std, ICTRES, country_name, food_shortage, parent_edu)
+
+# Check baseline country
+levels(pisa_sub_complete3$country_name)
+
+# Check dataset size and levels
+dim(pisa_sub_complete3)
+nlevels(as.factor(pisa_sub_complete3$country_name))
+nlevels(as.factor(pisa_sub_complete3$food_shortage))
+nlevels(as.factor(pisa_sub_complete3$parent_edu))
+
+# Estimate IV model
+instrumentVar_MathScore_ICT_model <- ivreg(
+  math_std ~ ICTRES + country_name + food_shortage |
+    parent_edu + country_name + food_shortage,
+  data = pisa_sub_complete3
+)
+
+summary(instrumentVar_MathScore_ICT_model, diagnostics = FALSE)
+
+# Q10 robustness test
+coeftest(
+  instrumentVar_MathScore_ICT_model,
+  vcov. = vcovHC(instrumentVar_MathScore_ICT_model, type = "HC1")
+)
+
+table9_q10 <- modelsummary(
+  instrumentVar_MathScore_ICT_model,
+  vcov = vcovHC(instrumentVar_MathScore_ICT_model, type = "HC1"),
+  coef_rename = c(
+    "(Intercept)" = "Constant",
+    "ICTRES" = "ICT Resources at Home"
+  ),
+  coef_omit = "country_name|food_shortage|parent_edu",
+  gof_map = data.frame(
+    raw = c("nobs", "r.squared", "adj.r.squared"),
+    clean = c("Observations", "R-squared", "Adjusted R-squared"),
+    fmt = c(0, 3, 3)
+  ),
+  stars = TRUE,
+  fmt = 3,
+  title = "Table 9. Instrumental Variables Regression Results for Mathematics Scores",
+  notes = c(
+    "Notes:",
+    "Heteroskedasticity-robust standard errors (HC1) are reported in parentheses.",
+    "The dependent variable is the standardized mathematics score.",
+    "ICT Resources at Home is instrumented using parental education.",
+    "Country dummies, food availability categories, and parental education dummies are included in the estimation but omitted from the table."
+  ),
+  output = "flextable"
+)
+
+table9_q10 <- table9_q10 |>
+  autofit() |>
+  theme_booktabs() |>
+  align(align = "center", part = "all") |>
+  align(j = 1, align = "left", part = "body") |>
+  bold(part = "header") |>
+  fontsize(size = 10, part = "all") |>
+  padding(padding = 4, part = "all")
+
+table9_q10
+
+save_as_docx(
+  "Table 9. Instrumental Variables Regression Results for Mathematics Scores" = table9_q10,
+  path = "C:/Users/kevin/Documents/QRM3/table8_q10_iv_regression.docx"
+)
+```
+
+
+*Table: Part 2*
+Produce one table with all regression results from PART 2. Make sure to format it properly (as you would encounter it in a journal article). The table should be understandable for someone who does not know your dataset.
+
+```{r}
+se_q6  <- vcovHC(std_MathScore_ICT_model, type = "HC1")
+se_q7  <- vcovHC(logged_MathScore_ICT_model, type = "HC1")
+se_q8  <- vcovHC(controlVar_MathScore_ICT_model, type = "HC1")
+se_q10 <- vcovHC(instrumentVar_MathScore_ICT_model, type = "HC1")
+
+table_part2 <- modelsummary(
+  list(
+    "Q6"  = std_MathScore_ICT_model,
+    "Q7"  = logged_MathScore_ICT_model,
+    "Q8"  = controlVar_MathScore_ICT_model,
+    "Q10" = instrumentVar_MathScore_ICT_model
+  ),
+
+  vcov = list(
+    se_q6,
+    se_q7,
+    se_q8,
+    se_q10
+  ),
+
+  coef_rename = c(
+    "(Intercept)" = "Constant",
+    "ICTRES" = "ICT Resources at Home"
+  ),
+
+  coef_omit = "country_name|parent_edu",
+
+  gof_map = data.frame(
+    raw   = c("nobs", "r.squared", "adj.r.squared"),
+    clean = c("Observations", "R-squared", "Adjusted R-squared"),
+    fmt   = c(0, 3, 3)
+  ),
+
+  stars = TRUE,
+  fmt = 3,
+
+  title = "Table Part 2: Regression Results",
+
+  notes = c(
+    "Notes:",
+    "Heteroskedasticity-robust standard errors (HC1) are reported in parentheses.",
+    "The dependent variable is the standardized mathematics score in Q6, Q8, and Q10.",
+    "In Q7 the dependent variable is the log-transformed mathematics score.",
+    "Country dummies are included in all specifications.",
+    "Food shortage and parental education controls are included where relevant."
+  ),
+
+  output = "flextable"
+)
+
+table_part2 <- table_part2 |>
+  autofit() |>
+  theme_booktabs() |>
+  align(align = "center", part = "all") |>
+  align(j = 1, align = "left", part = "body") |>
+  bold(part = "header") |>
+  fontsize(size = 10, part = "all") |>
+  padding(padding = 4, part = "all")
+
+table_part2
+
+save_as_docx(
+  "Table Part 2: Regression Results" = table_part2,
+  path = "C:/Users/kevin/Documents/QRM3/table_part2_regressions.docx"
+)
+```
+
