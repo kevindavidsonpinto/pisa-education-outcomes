@@ -41,15 +41,17 @@ Analysis performed in:
 - Instrumental variable analysis suggests the ICT-performance relationship is likely associative rather than strictly causal.
 
 ## Repository Structure
-pisa-education-outcomes
-│
-├── pisa_case_analysis.R
-├── report/
-│   └── QRM_III_PISA_Education_Outcomes.pdf
-├── figures/
-│   ├── score_distributions.png
-│   ├── reading_math_correlation.png
-│   └── interaction_effects.png
+
+**pisa_case_analysis.R**  
+Main R script containing the full econometric analysis.
+
+**report/**  
+- `QRM_III_PISA_Education_Outcomes.pdf` – Final written report of the analysis.
+
+**figures/**  
+- `score_distributions.png` – Distribution of standardized test scores.  
+- `reading_math_correlation.png` – Correlation between reading and mathematics scores.  
+- `interaction_effects.png` – Interaction model results by language spoken at home.
 
 ## Data
 
