@@ -63,7 +63,7 @@ This figure shows the distribution of standardized mathematics, reading, and sci
 ![Score Distribution](figures/figure1_scores.png)
 
 ### Correlation between Reading and Math Scores
-This figure shows the distribution of standardized mathematics, reading, and science scores.
+This figure shows the correlation between Reading Scores and Math Scores
 ![Correlation](figures/figure2_reading_math_correlation.png)
 
 ### Interaction between test-taker native languages
