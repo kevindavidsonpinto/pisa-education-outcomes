@@ -3,7 +3,7 @@ title: "An Empirical Study of Educational Outcomes"
 subtitle: "Regression Evidence from PISA 2022 Across Eight Countries"
 author: |
   **Kevin Pinto, David Oldewarris**  
-date: "March 9th, 2026"
+date: "`r Sys.Date()`"
 output:
   pdf_document:
     latex_engine: xelatex
